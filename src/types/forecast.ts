@@ -75,9 +75,17 @@ export interface ForecastSummary {
   forecastHorizonEnd: IsoDateString;
 }
 
+/** 各日の終わり時点の残高。イベントのある日だけ点を持つ。 */
+export interface BalanceTimelinePoint {
+  date: IsoDateString;
+  balances: Record<string, number>;
+  totalCash: number;
+}
+
 export interface ForecastResult {
   events: ForecastEvent[];
   alerts: ForecastAlert[];
   summary: ForecastSummary;
   assumptions: string[];
+  balanceTimeline: BalanceTimelinePoint[];
 }

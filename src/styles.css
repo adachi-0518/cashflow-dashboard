@@ -1038,6 +1038,130 @@ details summary {
   padding: 0 16px 16px;
 }
 
+.balance-chart {
+  position: relative;
+}
+
+.balance-chart__svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  overflow: visible;
+}
+
+/* グリッドと軸は面から一段落とすだけ。破線にすると閾値と誤読されるので使わない */
+.balance-chart__grid-line {
+  stroke: #e1e0d9;
+  stroke-width: 1;
+}
+
+.balance-chart__zero-line {
+  stroke: var(--danger);
+  stroke-width: 1.5;
+  opacity: 0.55;
+}
+
+.balance-chart__danger-zone {
+  fill: rgba(198, 71, 71, 0.06);
+}
+
+.balance-chart__axis-label {
+  font-size: 12px;
+  fill: #898781;
+  font-variant-numeric: tabular-nums;
+}
+
+.balance-chart__zero-label {
+  font-size: 12px;
+  fill: var(--danger);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.balance-chart__series-label {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.balance-chart__lowest-label {
+  font-size: 12px;
+  font-weight: 700;
+  fill: var(--text-strong);
+}
+
+.balance-chart__lowest-label--danger {
+  fill: var(--danger);
+}
+
+.balance-chart__crosshair {
+  stroke: rgba(18, 39, 35, 0.28);
+  stroke-width: 1;
+}
+
+.balance-chart__tooltip {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  pointer-events: none;
+  background: var(--surface-strong);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  padding: 10px 12px;
+  font-size: 0.82rem;
+  white-space: nowrap;
+  z-index: 2;
+}
+
+.balance-chart__tooltip strong {
+  color: var(--text-strong);
+}
+
+.balance-chart__tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  color: var(--text-subtle);
+}
+
+.balance-chart__tooltip-row strong {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.balance-chart__tooltip-row--total {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.balance-chart__swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.balance-chart__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 12px;
+  font-size: 0.84rem;
+  color: var(--text-subtle);
+}
+
+.balance-chart__legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.balance-chart__legend-note {
+  color: var(--text-subtle);
+}
+
 /* 横に並べきれなくなった順に、1カラムへ落としていく */
 @media (max-width: 1280px) {
   .content-grid {

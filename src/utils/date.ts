@@ -99,6 +99,14 @@ export function getDateDay(dateString: IsoDateString): number {
   return parseDateString(dateString).getDate();
 }
 
+export function differenceInDays(from: IsoDateString, to: IsoDateString): number {
+  const fromTime = parseDateString(from).getTime();
+  const toTime = parseDateString(to).getTime();
+
+  // 日付は正午基準で作っているので、夏時間で1時間ずれても丸めれば日数は狂わない
+  return Math.round((toTime - fromTime) / 86_400_000);
+}
+
 export function getNextOccurrenceOnOrAfter(
   fromDate: IsoDateString,
   day: number,

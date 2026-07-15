@@ -28,6 +28,9 @@ jobs:
 
       - run: npm ci
 
+      # 数字が壊れたまま公開しないよう、デプロイ前にテストを通す
+      - run: npm test
+
       - run: npm run build
 
       - uses: actions/configure-pages@v5

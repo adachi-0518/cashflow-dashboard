@@ -1,5 +1,11 @@
 import { getCardBalanceMetrics } from "../cardMetrics";
-import type { ForecastAlert, ForecastEvent, ForecastResult, WithdrawalResilience } from "../../types/forecast";
+import type {
+  BalanceTimelinePoint,
+  ForecastAlert,
+  ForecastEvent,
+  ForecastResult,
+  WithdrawalResilience,
+} from "../../types/forecast";
 import type { AppData } from "../../types/models";
 import { getMonthEnd, getNextMonthStart, compareDateStrings } from "../../utils/date";
 import { formatDate, formatYearMonth } from "../../utils/format";
@@ -45,6 +51,11 @@ export function calculateForecast({
   ];
   const initialShortageAccounts = findShortageAccounts(accountBalances);
   let previousShortageSignature = [...initialShortageAccounts].sort().join("|");
+  // 日付をキーにすることで、同じ日に複数イベントがあっても最後の1件（＝その日の
+  // 終わりの残高）だけが残る。Map は最初の挿入位置を保つので日付順も崩れない。
+  const timelineByDate = new Map<string, BalanceTimelinePoint>([
+    [today, createTimelinePoint(today, accountBalances, accountIds, totalCash)],
+  ]);
 
   if (initialShortageAccounts.length > 0) {
     alerts.push({
@@ -127,7 +138,19 @@ export function calculateForecast({
 
     if (event.affectsCash) {
       accountSnapshots.push(createAccountCashSnapshot(accountBalances, accountIds, totalCash));
+      timelineByDate.set(
+        event.date,
+        createTimelinePoint(event.date, accountBalances, accountIds, totalCash),
+      );
     }
+  }
+
+  // 最終イベント以降は残高が動かないので、予測期間の終端まで水平に伸ばす
+  const timelinePoints = [...timelineByDate.values()];
+  const lastTimelinePoint = timelinePoints[timelinePoints.length - 1];
+
+  if (lastTimelinePoint && lastTimelinePoint.date !== horizonEnd) {
+    timelinePoints.push({ ...lastTimelinePoint, date: horizonEnd });
   }
 
   const monthEnd = getMonthEnd(today);
@@ -163,11 +186,13 @@ export function calculateForecast({
   return {
     events: simulatedEvents,
     alerts,
+    balanceTimeline: timelinePoints,
     assumptions: [
       "予測対象は今日から90日先までです。",
       "同日の処理順は、カード利用計上 → 口座振替 → 口座からの支出・引き落とし → 収入の順です。",
       "安全に使える額は、各口座の将来最小残高を合計して算出し、どこか1口座でも不足見込みがあれば 0 円にします。",
       "カードの次回請求額と未確定利用額は、各カードの入力時点日と引落タイミング設定を基準に引き落とし月へ割り当てます。",
+      "サブスクとカード払いの支出は、カード情報の時点日から数えます。時点日から今日までの利用は利用可能額にまだ入っていないためです。",
       "カード未確定利用額は原則「利用枠 - 利用可能額 - 直近の引落額」で自動計算し、必要時は手動上書きを優先します。",
     ],
     summary: {
@@ -223,6 +248,18 @@ function createAccountCashSnapshot(
       accountIds.map((accountId) => [accountId, accountBalances.get(accountId) ?? 0]),
     ),
     totalCash,
+  };
+}
+
+function createTimelinePoint(
+  date: string,
+  accountBalances: Map<string, number>,
+  accountIds: string[],
+  totalCash: number,
+): BalanceTimelinePoint {
+  return {
+    date,
+    ...createAccountCashSnapshot(accountBalances, accountIds, totalCash),
   };
 }
 

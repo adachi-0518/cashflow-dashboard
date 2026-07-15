@@ -180,7 +180,14 @@ export function generateForecastEvents(
   }
 
   for (const expense of data.oneTimeExpenses.filter(isEnabled)) {
-    if (!isDateInRange(expense.date, today, horizonEnd)) {
+    const expenseCard =
+      expense.paymentType === "card" && expense.cardId ? cardMap.get(expense.cardId) : undefined;
+    // カード利用はカード情報の時点日を起点にする。時点日から今日までの利用は
+    // 利用可能額にも未確定利用額にも入っていないため、今日起点だと丸ごと抜け落ちる。
+    // 口座払いは過去日なら残高に反映済みなので、今日を起点のままにする。
+    const chargeStart = expenseCard ? cardSnapshotDates.get(expenseCard.id) ?? today : today;
+
+    if (!isDateInRange(expense.date, chargeStart, horizonEnd)) {
       continue;
     }
 
@@ -219,9 +226,7 @@ export function generateForecastEvents(
       continue;
     }
 
-    const card = expense.cardId ? cardMap.get(expense.cardId) : undefined;
-
-    if (!card) {
+    if (!expenseCard) {
       alerts.push({
         id: createId("alert"),
         level: "warning",
@@ -234,7 +239,7 @@ export function generateForecastEvents(
     pushChargeProjection(chargeProjections, {
       id: expense.id,
       date: expense.date,
-      card,
+      card: expenseCard,
       title: expense.name,
       amount: expense.amount,
       reasonItems: [
@@ -259,7 +264,12 @@ export function generateForecastEvents(
       continue;
     }
 
-    const dates = enumerateMonthlyDatesByDay(subscription.billingDay, today, horizonEnd);
+    // 単発のカード払いと同じく、カード情報の時点日から数える
+    const dates = enumerateMonthlyDatesByDay(
+      subscription.billingDay,
+      cardSnapshotDates.get(card.id) ?? today,
+      horizonEnd,
+    );
 
     for (const date of dates) {
       pushChargeProjection(chargeProjections, {
@@ -435,6 +445,12 @@ export function generateForecastEvents(
     }
 
     if (compareDateStrings(bucket.date, horizonEnd) > 0) {
+      continue;
+    }
+
+    // 済んだ引落は今日の口座残高にすでに反映されている。カード利用を時点日まで
+    // さかのぼって拾う以上、ここで止めないと過去分を二重に引いてしまう。
+    if (compareDateStrings(bucket.date, today) < 0) {
       continue;
     }
 

@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { AlertList } from "./components/AlertList";
+import { BalanceTrendChart } from "./components/BalanceTrendChart";
 import { ForecastTable } from "./components/ForecastTable";
 import { QuickUpdatePanel } from "./components/QuickUpdatePanel";
 import { SectionCard } from "./components/SectionCard";
@@ -209,6 +210,18 @@ export default function App() {
             subtitle="合算残高では足りていても、引き落とし口座単体で不足する場合はここで検知します。"
           >
             <AlertList alerts={forecast.alerts} />
+          </SectionCard>
+
+          <SectionCard
+            title="残高の推移"
+            subtitle="口座ごとの残高が今後90日でどう動くかです。いちばんへこむ点と、0円ラインまでの余裕を確認できます。"
+          >
+            <BalanceTrendChart
+              timeline={forecast.balanceTimeline}
+              accounts={data.accounts.filter((account) => account.enabled !== false)}
+              today={today}
+              horizonEnd={forecast.summary.forecastHorizonEnd}
+            />
           </SectionCard>
 
           <SectionCard

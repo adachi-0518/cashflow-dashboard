@@ -29,6 +29,23 @@ export function formatCurrency(value: number): string {
   return currencyFormatter.format(Math.round(value));
 }
 
+/** 軸ラベル用。¥388,000 では長すぎるので「38.8万」に縮める。 */
+export function formatCompactCurrency(value: number): string {
+  const rounded = Math.round(value);
+
+  if (rounded === 0) {
+    return "0";
+  }
+
+  if (Math.abs(rounded) < 10_000) {
+    return rounded.toLocaleString("ja-JP");
+  }
+
+  const man = rounded / 10_000;
+
+  return `${Number.isInteger(man) ? man : man.toFixed(1)}万`;
+}
+
 export function formatDate(dateString: IsoDateString): string {
   return mediumDateFormatter.format(parseDateString(dateString));
 }
