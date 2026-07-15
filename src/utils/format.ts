@@ -20,12 +20,21 @@ const mediumDateFormatter = new Intl.DateTimeFormat("ja-JP", {
   day: "numeric",
 });
 
+const yearMonthFormatter = new Intl.DateTimeFormat("ja-JP", {
+  year: "numeric",
+  month: "long",
+});
+
 export function formatCurrency(value: number): string {
   return currencyFormatter.format(Math.round(value));
 }
 
 export function formatDate(dateString: IsoDateString): string {
   return mediumDateFormatter.format(parseDateString(dateString));
+}
+
+export function formatYearMonth(dateString: IsoDateString): string {
+  return yearMonthFormatter.format(parseDateString(dateString));
 }
 
 export function formatShortDate(dateString: IsoDateString): string {
@@ -38,6 +47,8 @@ export function getEventKindLabel(kind: ForecastEventKind): string {
       return "収入";
     case "account-expense":
       return "口座支出";
+    case "account-transfer":
+      return "口座振替";
     case "card-charge":
       return "カード利用";
     case "card-withdrawal":

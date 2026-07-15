@@ -1,8 +1,10 @@
 import { inferAvailableAmount } from "../lib/cardMetrics";
 import type {
   Account,
+  AccountTransfer,
   AppData,
   CardUnsettledAmountMode,
+  CardWithdrawalTiming,
   CreditCard,
   IncomePlan,
   OneTimeExpense,
@@ -36,6 +38,14 @@ function getDay(value: unknown, fallback: number): number {
   return Math.min(31, Math.max(1, Math.round(getNumber(value, fallback))));
 }
 
+function getOptionalBoolean(value: unknown): boolean | undefined {
+  return typeof value === "boolean" ? value : undefined;
+}
+
+function getWithdrawalTiming(value: unknown): CardWithdrawalTiming {
+  return value === "next-month" ? "next-month" : "after-closing";
+}
+
 function normalizeAccount(value: unknown, index: number): Account {
   const record = isRecord(value) ? value : {};
 
@@ -43,10 +53,11 @@ function normalizeAccount(value: unknown, index: number): Account {
     id: getString(record.id, `account-${index + 1}`),
     name: getString(record.name, `口座 ${index + 1}`),
     balance: getNumber(record.balance, 0),
+    enabled: getOptionalBoolean(record.enabled),
   };
 }
 
-function normalizeCard(value: unknown, index: number): CreditCard {
+function normalizeCard(value: unknown, index: number, today: string): CreditCard {
   const record = isRecord(value) ? value : {};
   const limit = getNonNegativeNumber(record.limit, 0);
   const nextBillingAmount = getNonNegativeNumber(record.nextBillingAmount, 0);
@@ -72,11 +83,14 @@ function normalizeCard(value: unknown, index: number): CreditCard {
     limit,
     closingDay: getDay(record.closingDay, 20),
     withdrawalDay: getDay(record.withdrawalDay, 10),
+    withdrawalTiming: getWithdrawalTiming(record.withdrawalTiming),
     withdrawalAccountId: getString(record.withdrawalAccountId, ""),
+    snapshotDate: getString(record.snapshotDate, today),
     availableAmount,
     nextBillingAmount,
     unsettledAmountMode,
     manualUnsettledAmount,
+    enabled: getOptionalBoolean(record.enabled),
   };
 }
 
@@ -89,6 +103,7 @@ function normalizeSubscription(value: unknown, index: number): Subscription {
     monthlyAmount: getNonNegativeNumber(record.monthlyAmount, 0),
     billingDay: getDay(record.billingDay, 1),
     cardId: getString(record.cardId, ""),
+    enabled: getOptionalBoolean(record.enabled),
   };
 }
 
@@ -102,6 +117,25 @@ function normalizeIncomePlan(value: unknown, index: number, today: string): Inco
     date: getString(record.date, today),
     accountId: getString(record.accountId, ""),
     recurring: record.recurring === "once" ? "once" : "monthly",
+    enabled: getOptionalBoolean(record.enabled),
+  };
+}
+
+function normalizeAccountTransfer(
+  value: unknown,
+  index: number,
+  today: string,
+): AccountTransfer {
+  const record = isRecord(value) ? value : {};
+
+  return {
+    id: getString(record.id, `transfer-${index + 1}`),
+    name: getString(record.name, `口座振替 ${index + 1}`),
+    amount: getNonNegativeNumber(record.amount, 0),
+    date: getString(record.date, today),
+    fromAccountId: getString(record.fromAccountId, ""),
+    toAccountId: getString(record.toAccountId, ""),
+    enabled: getOptionalBoolean(record.enabled),
   };
 }
 
@@ -117,6 +151,7 @@ function normalizeOneTimeExpense(value: unknown, index: number, today: string): 
     paymentType,
     accountId: paymentType === "account" ? getString(record.accountId, "") : undefined,
     cardId: paymentType === "card" ? getString(record.cardId, "") : undefined,
+    enabled: getOptionalBoolean(record.enabled),
   };
 }
 
@@ -126,10 +161,13 @@ export function normalizeAppData(value: unknown): AppData {
 
   return {
     accounts: getArray(record.accounts).map(normalizeAccount),
-    cards: getArray(record.cards).map(normalizeCard),
+    cards: getArray(record.cards).map((item, index) => normalizeCard(item, index, today)),
     subscriptions: getArray(record.subscriptions).map(normalizeSubscription),
     incomePlans: getArray(record.incomePlans).map((item, index) =>
       normalizeIncomePlan(item, index, today),
+    ),
+    accountTransfers: getArray(record.accountTransfers).map((item, index) =>
+      normalizeAccountTransfer(item, index, today),
     ),
     oneTimeExpenses: getArray(record.oneTimeExpenses).map((item, index) =>
       normalizeOneTimeExpense(item, index, today),

@@ -1,6 +1,7 @@
-import type { CardUnsettledAmountMode, CreditCard } from "../types/models";
+import type { CardUnsettledAmountMode, CreditCard, IsoDateString } from "../types/models";
 
 export interface CardSnapshotDraftValues {
+  snapshotDate: IsoDateString;
   nextBillingAmount: number;
   availableAmount: number;
   unsettledAmountMode: CardUnsettledAmountMode;
@@ -93,6 +94,7 @@ export function getCardBalanceMetrics(input: CardBalanceInput): CardBalanceMetri
   }
 
   return {
+    snapshotDate: input.snapshotDate,
     limit,
     nextBillingAmount,
     availableAmount,
@@ -109,6 +111,7 @@ export function getCardBalanceMetrics(input: CardBalanceInput): CardBalanceMetri
 
 export function createCardSnapshotDraft(card: CreditCard): CardSnapshotDraftValues {
   return {
+    snapshotDate: card.snapshotDate,
     nextBillingAmount: card.nextBillingAmount,
     availableAmount: card.availableAmount,
     unsettledAmountMode: card.unsettledAmountMode,
@@ -123,11 +126,16 @@ export function createCardSnapshotPatch(
   input: CardBalanceInput,
 ): Pick<
   CreditCard,
-  "nextBillingAmount" | "availableAmount" | "unsettledAmountMode" | "manualUnsettledAmount"
+  | "snapshotDate"
+  | "nextBillingAmount"
+  | "availableAmount"
+  | "unsettledAmountMode"
+  | "manualUnsettledAmount"
 > {
   const metrics = getCardBalanceMetrics(input);
 
   return {
+    snapshotDate: input.snapshotDate,
     nextBillingAmount: metrics.nextBillingAmount,
     availableAmount: metrics.availableAmount,
     unsettledAmountMode: metrics.unsettledAmountMode,

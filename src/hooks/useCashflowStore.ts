@@ -1,11 +1,12 @@
 import { useCallback, useMemo } from "react";
-import { LOCAL_STORAGE_KEY } from "../data/constants";
+import { LOCAL_STORAGE_BACKUP_KEY, LOCAL_STORAGE_KEY } from "../data/constants";
 import { normalizeAppData } from "../data/normalizeAppData";
 import { createEmptyData, createSampleData } from "../data/sampleData";
 import { useLocalStorageState } from "./useLocalStorageState";
 import { createCardSnapshotPatch } from "../lib/cardMetrics";
 import type {
   Account,
+  AccountTransfer,
   AppData,
   CreditCard,
   IncomePlan,
@@ -70,6 +71,9 @@ function removeAccountCascade(data: AppData, id: string): AppData {
       (subscription) => !removedCardIds.has(subscription.cardId),
     ),
     incomePlans: data.incomePlans.filter((incomePlan) => incomePlan.accountId !== id),
+    accountTransfers: data.accountTransfers.filter(
+      (transfer) => transfer.fromAccountId !== id && transfer.toAccountId !== id,
+    ),
     oneTimeExpenses: data.oneTimeExpenses.filter((expense) => {
       if (expense.paymentType === "account") {
         return expense.accountId !== id;
@@ -85,11 +89,14 @@ export function useCashflowStore() {
     LOCAL_STORAGE_KEY,
     createInitialData,
     normalizeAppData,
+    LOCAL_STORAGE_BACKUP_KEY,
   );
 
+  // 正規化は読み込み・インポートの境界だけで行う。編集のたびに走らせると、
+  // 入力途中の空文字が既定名に差し替わり、全項目の参照も作り直されてしまう。
   const commit = useCallback(
     (updater: (current: AppData) => AppData) => {
-      setData((current) => normalizeAppData(updater(current)));
+      setData(updater);
     },
     [setData],
   );
@@ -98,6 +105,9 @@ export function useCashflowStore() {
     () => ({
       replaceWithSampleData() {
         setData(normalizeAppData(createSampleData()));
+      },
+      replaceData(importedData: unknown) {
+        setData(normalizeAppData(importedData));
       },
       addAccount(account: Omit<Account, "id">) {
         commit((current) => ({
@@ -165,6 +175,24 @@ export function useCashflowStore() {
           incomePlans: removeById(current.incomePlans, id),
         }));
       },
+      addAccountTransfer(transfer: Omit<AccountTransfer, "id">) {
+        commit((current) => ({
+          ...current,
+          accountTransfers: addWithId(current.accountTransfers, "transfer", transfer),
+        }));
+      },
+      updateAccountTransfer(id: string, patch: Partial<AccountTransfer>) {
+        commit((current) => ({
+          ...current,
+          accountTransfers: patchById(current.accountTransfers, id, patch),
+        }));
+      },
+      removeAccountTransfer(id: string) {
+        commit((current) => ({
+          ...current,
+          accountTransfers: removeById(current.accountTransfers, id),
+        }));
+      },
       addOneTimeExpense(expense: Omit<OneTimeExpense, "id">) {
         commit((current) => ({
           ...current,
@@ -195,6 +223,7 @@ export function useCashflowStore() {
         updates: Record<
           string,
           {
+            snapshotDate: CreditCard["snapshotDate"];
             nextBillingAmount: number;
             availableAmount: number;
             unsettledAmountMode: CreditCard["unsettledAmountMode"];

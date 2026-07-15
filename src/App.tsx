@@ -7,9 +7,10 @@ import { SettingsPanel } from "./components/SettingsPanel";
 import { SummaryCard } from "./components/SummaryCard";
 import { APP_TITLE } from "./data/constants";
 import { useCashflowStore } from "./hooks/useCashflowStore";
+import { useTodayDateString } from "./hooks/useTodayDateString";
 import { buildForecast } from "./lib/forecast";
-import { getTodayDateString } from "./utils/date";
-import { formatCurrency, formatDate } from "./utils/format";
+import { getNextMonthStart } from "./utils/date";
+import { formatCurrency, formatDate, formatYearMonth } from "./utils/format";
 
 function getToneFromAmount(value: number): "good" | "warning" | "danger" | "neutral" {
   if (value > 0) {
@@ -24,7 +25,9 @@ function getToneFromAmount(value: number): "good" | "warning" | "danger" | "neut
 }
 
 export default function App() {
-  const today = getTodayDateString();
+  const today = useTodayDateString();
+  const currentMonthLabel = formatYearMonth(today);
+  const nextMonthLabel = formatYearMonth(getNextMonthStart(today));
   const { data, actions, hasLoaded } = useCashflowStore();
   const forecast = useMemo(() => buildForecast(data, today), [data, today]);
   const visibleEvents = useMemo(
@@ -49,23 +52,31 @@ export default function App() {
       : forecast.summary.withdrawalResilience.status === "risk"
         ? "danger"
         : "neutral";
+  const dangerAlertCount = forecast.alerts.filter((alert) => alert.level === "danger").length;
+  const warningAlertCount = forecast.alerts.filter((alert) => alert.level === "warning").length;
   const primaryStatusTone =
-    forecast.summary.alertCount > 0
+    dangerAlertCount > 0
       ? "danger"
+      : warningAlertCount > 0
+        ? "warning"
       : forecast.summary.safeToSpendNow > 0
         ? "good"
         : "warning";
   const primaryStatusLabel =
-    forecast.summary.alertCount > 0
+    dangerAlertCount > 0
       ? "不足リスクあり"
+      : warningAlertCount > 0
+        ? "要更新の情報あり"
       : forecast.summary.safeToSpendNow > 0
         ? "いまは概ね安全"
         : "余力は小さめ";
   const primaryStatusMessage =
-    forecast.summary.alertCount > 0
+    dangerAlertCount > 0
       ? "先に不足アラートの内容を確認してください。安全額は保守的に表示しています。"
+      : warningAlertCount > 0
+        ? "カード請求や入力時点の更新が必要な可能性があります。予測を信用する前にアラートを確認してください。"
       : forecast.summary.safeToSpendNow > 0
-        ? "今日の安全額を起点に、次イベント後と月末自由額を見れば判断しやすい状態です。"
+        ? `今日の安全額を起点に、次イベント後と${currentMonthLabel}末の自由額を見れば判断しやすい状態です。`
         : "不足は出ていませんが、追加支出の余地はかなり限られています。";
   const topAlerts = forecast.alerts.slice(0, 2);
 
@@ -76,7 +87,7 @@ export default function App() {
           <p className="eyebrow">LocalStorage / ローカル専用 / 90日予測</p>
           <h1>{APP_TITLE}</h1>
           <p className="app-header__description">
-            今日の安全額、月末の余力、来月の引き落とし耐性を 1 画面で確認できます。
+            今日の安全額、{currentMonthLabel}末の余力、{nextMonthLabel}の引き落とし耐性を 1 画面で確認できます。
           </p>
         </div>
         <div className="header-metadata">
@@ -110,11 +121,11 @@ export default function App() {
               <strong>{formatCurrency(forecast.summary.nextEventSpendable.value)}</strong>
             </div>
             <div>
-              <span>月末自由額</span>
+              <span>{currentMonthLabel}末</span>
               <strong>{formatCurrency(forecast.summary.monthEndFreeCash)}</strong>
             </div>
             <div>
-              <span>来月引き落とし</span>
+              <span>{nextMonthLabel}引き落とし</span>
               <strong>{forecast.summary.withdrawalResilience.label}</strong>
             </div>
           </div>
@@ -169,15 +180,15 @@ export default function App() {
           title="月末自由額"
           value={formatCurrency(forecast.summary.monthEndFreeCash)}
           tone={getToneFromAmount(forecast.summary.monthEndFreeCash)}
-          eyebrow="今月の見込み"
-          description="今月末時点での合算現金残高の見込みです。"
+          eyebrow={`${currentMonthLabel}の見込み`}
+          description={`${currentMonthLabel}末時点での合算現金残高の見込みです。`}
           compact
         />
         <SummaryCard
-          title="来月引き落とし耐性"
+          title={`${nextMonthLabel}引き落とし耐性`}
           value={forecast.summary.withdrawalResilience.label}
           tone={resilienceTone}
-          eyebrow="翌月チェック"
+          eyebrow={nextMonthLabel}
           description={forecast.summary.withdrawalResilience.note}
           compact
         />
@@ -224,15 +235,18 @@ export default function App() {
             onSaveAccountBalances={actions.updateAccountBalances}
             onSaveCardSnapshots={actions.updateCardSnapshots}
             onAddIncomePlan={actions.addIncomePlan}
+            onAddAccountTransfer={actions.addAccountTransfer}
             onAddOneTimeExpense={actions.addOneTimeExpense}
           />
 
           <SettingsPanel
             today={today}
+            appData={data}
             accounts={data.accounts}
             cards={data.cards}
             subscriptions={data.subscriptions}
             incomePlans={data.incomePlans}
+            accountTransfers={data.accountTransfers}
             oneTimeExpenses={data.oneTimeExpenses}
             onAddAccount={actions.addAccount}
             onUpdateAccount={actions.updateAccount}
@@ -246,9 +260,13 @@ export default function App() {
             onAddIncomePlan={actions.addIncomePlan}
             onUpdateIncomePlan={actions.updateIncomePlan}
             onDeleteIncomePlan={actions.removeIncomePlan}
+            onAddAccountTransfer={actions.addAccountTransfer}
+            onUpdateAccountTransfer={actions.updateAccountTransfer}
+            onDeleteAccountTransfer={actions.removeAccountTransfer}
             onAddOneTimeExpense={actions.addOneTimeExpense}
             onUpdateOneTimeExpense={actions.updateOneTimeExpense}
             onDeleteOneTimeExpense={actions.removeOneTimeExpense}
+            onImportData={actions.replaceData}
           />
         </div>
       </div>

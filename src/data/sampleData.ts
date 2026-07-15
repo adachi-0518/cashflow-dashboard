@@ -27,7 +27,9 @@ export function createSampleData(baseDate: string = getTodayDateString()): AppDa
         limit: 600000,
         closingDay: 20,
         withdrawalDay: 10,
+        withdrawalTiming: "next-month",
         withdrawalAccountId: "account-main",
+        snapshotDate: baseDate,
         availableAmount: 500000,
         nextBillingAmount: 72000,
         unsettledAmountMode: "auto",
@@ -39,7 +41,9 @@ export function createSampleData(baseDate: string = getTodayDateString()): AppDa
         limit: 250000,
         closingDay: 5,
         withdrawalDay: 27,
+        withdrawalTiming: "after-closing",
         withdrawalAccountId: "account-main",
+        snapshotDate: baseDate,
         availableAmount: 223000,
         nextBillingAmount: 18000,
         unsettledAmountMode: "auto",
@@ -92,6 +96,17 @@ export function createSampleData(baseDate: string = getTodayDateString()): AppDa
         enabled: true,
       },
     ],
+    accountTransfers: [
+      {
+        id: "transfer-buffer",
+        name: "引落前の資金移動",
+        amount: 50000,
+        date: addDays(baseDate, 8),
+        fromAccountId: "account-reserve",
+        toAccountId: "account-main",
+        enabled: true,
+      },
+    ],
     oneTimeExpenses: [
       {
         id: "expense-tax",
@@ -121,6 +136,7 @@ export function createEmptyData(): AppData {
     cards: [],
     subscriptions: [],
     incomePlans: [],
+    accountTransfers: [],
     oneTimeExpenses: [],
   };
 }

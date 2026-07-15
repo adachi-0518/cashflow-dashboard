@@ -1,6 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { ChangeEvent } from "react";
+import { createAppDataExportFile, parseImportedAppData } from "../data/dataFile";
 import type {
   Account,
+  AccountTransfer,
+  AppData,
   CreditCard,
   IncomePlan,
   OneTimeExpense,
@@ -8,12 +12,18 @@ import type {
 } from "../types/models";
 import { SectionCard } from "./SectionCard";
 
+function getAlternateAccountId(accounts: Account[], excludedAccountId: string): string {
+  return accounts.find((account) => account.id !== excludedAccountId)?.id ?? "";
+}
+
 interface SettingsPanelProps {
   today: string;
+  appData: AppData;
   accounts: Account[];
   cards: CreditCard[];
   subscriptions: Subscription[];
   incomePlans: IncomePlan[];
+  accountTransfers: AccountTransfer[];
   oneTimeExpenses: OneTimeExpense[];
   onAddAccount: (account: Omit<Account, "id">) => void;
   onUpdateAccount: (id: string, patch: Partial<Account>) => void;
@@ -27,9 +37,13 @@ interface SettingsPanelProps {
   onAddIncomePlan: (incomePlan: Omit<IncomePlan, "id">) => void;
   onUpdateIncomePlan: (id: string, patch: Partial<IncomePlan>) => void;
   onDeleteIncomePlan: (id: string) => void;
+  onAddAccountTransfer: (transfer: Omit<AccountTransfer, "id">) => void;
+  onUpdateAccountTransfer: (id: string, patch: Partial<AccountTransfer>) => void;
+  onDeleteAccountTransfer: (id: string) => void;
   onAddOneTimeExpense: (expense: Omit<OneTimeExpense, "id">) => void;
   onUpdateOneTimeExpense: (id: string, patch: Partial<OneTimeExpense>) => void;
   onDeleteOneTimeExpense: (id: string) => void;
+  onImportData: (data: AppData) => void;
 }
 
 function toNumber(value: string): number {
@@ -53,10 +67,12 @@ function confirmDeletion(name: string, relatedItems: Array<[string, number]> = [
 
 export function SettingsPanel({
   today,
+  appData,
   accounts,
   cards,
   subscriptions,
   incomePlans,
+  accountTransfers,
   oneTimeExpenses,
   onAddAccount,
   onUpdateAccount,
@@ -70,12 +86,18 @@ export function SettingsPanel({
   onAddIncomePlan,
   onUpdateIncomePlan,
   onDeleteIncomePlan,
+  onAddAccountTransfer,
+  onUpdateAccountTransfer,
+  onDeleteAccountTransfer,
   onAddOneTimeExpense,
   onUpdateOneTimeExpense,
   onDeleteOneTimeExpense,
+  onImportData,
 }: SettingsPanelProps) {
+  const importInputRef = useRef<HTMLInputElement>(null);
   const defaultAccountId = accounts[0]?.id ?? "";
   const defaultCardId = cards[0]?.id ?? "";
+  const defaultTransferToAccountId = getAlternateAccountId(accounts, defaultAccountId);
 
   const [accountForm, setAccountForm] = useState({
     name: "",
@@ -86,6 +108,7 @@ export function SettingsPanel({
     limit: 300000,
     closingDay: 20,
     withdrawalDay: 10,
+    withdrawalTiming: "next-month" as CreditCard["withdrawalTiming"],
     withdrawalAccountId: defaultAccountId,
   });
   const [subscriptionForm, setSubscriptionForm] = useState({
@@ -101,6 +124,13 @@ export function SettingsPanel({
     accountId: defaultAccountId,
     recurring: "monthly" as IncomePlan["recurring"],
   });
+  const [transferForm, setTransferForm] = useState({
+    name: "",
+    amount: 0,
+    date: today,
+    fromAccountId: defaultAccountId,
+    toAccountId: defaultTransferToAccountId,
+  });
   const [expenseForm, setExpenseForm] = useState({
     name: "",
     amount: 0,
@@ -109,6 +139,60 @@ export function SettingsPanel({
     accountId: defaultAccountId,
     cardId: defaultCardId,
   });
+  const [dataFileStatus, setDataFileStatus] = useState("");
+
+  function handleExportData() {
+    const file = createAppDataExportFile(appData);
+    const blob = new Blob([JSON.stringify(file, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const datePart = today.replaceAll("-", "");
+
+    link.href = url;
+    link.download = `cashflow-backup-${datePart}.json`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    setDataFileStatus("JSONを書き出しました。");
+  }
+
+  async function handleImportData(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(await file.text()) as unknown;
+      const importedData = parseImportedAppData(parsed);
+
+      if (!importedData) {
+        setDataFileStatus("読み込みできませんでした。資金繰りデータのJSONを選んでください。");
+        return;
+      }
+
+      const confirmed = window.confirm(
+        "現在の入力内容を、選択したJSONの内容で置き換えます。実行しますか？",
+      );
+
+      if (!confirmed) {
+        setDataFileStatus("読み込みをキャンセルしました。");
+        return;
+      }
+
+      onImportData(importedData);
+      setDataFileStatus("JSONからデータを読み込みました。");
+    } catch {
+      setDataFileStatus("JSONの形式を読み取れませんでした。");
+    } finally {
+      input.value = "";
+    }
+  }
 
   useEffect(() => {
     setCardForm((current) => ({
@@ -125,6 +209,24 @@ export function SettingsPanel({
         ? current.accountId
         : defaultAccountId,
     }));
+    setTransferForm((current) => {
+      const nextFromAccountId = accounts.some(
+        (account) => account.id === current.fromAccountId,
+      )
+        ? current.fromAccountId
+        : defaultAccountId;
+      const nextToAccountId = accounts
+        .filter((account) => account.id !== nextFromAccountId)
+        .some((account) => account.id === current.toAccountId)
+        ? current.toAccountId
+        : getAlternateAccountId(accounts, nextFromAccountId);
+
+      return {
+        ...current,
+        fromAccountId: nextFromAccountId,
+        toAccountId: nextToAccountId,
+      };
+    });
     setExpenseForm((current) => ({
       ...current,
       accountId: accounts.some((account) => account.id === current.accountId)
@@ -156,6 +258,13 @@ export function SettingsPanel({
         [
           "収入予定",
           incomePlans.filter((incomePlan) => incomePlan.accountId === account.id).length,
+        ],
+        [
+          "口座振替",
+          accountTransfers.filter(
+            (transfer) =>
+              transfer.fromAccountId === account.id || transfer.toAccountId === account.id,
+          ).length,
         ],
         [
           "単発支出",
@@ -195,9 +304,44 @@ export function SettingsPanel({
   return (
     <SectionCard
       title="設定エリア"
-      subtitle="口座・カード・サブスク・収入予定・単発支出を同じ画面で編集できます。"
+      subtitle="口座・カード・サブスク・収入予定・口座振替・単発支出を同じ画面で編集できます。"
     >
       <div className="stack-layout">
+        <div className="form-block data-file-tools">
+          <div className="subsection-heading">
+            <div>
+              <h3>データのバックアップ</h3>
+              <p className="form-note">
+                入力済みの口座・カード・サブスク・予定をJSONで保存し、同じ画面から復元できます。
+              </p>
+            </div>
+          </div>
+          <div className="button-row">
+            <button type="button" className="button button--secondary" onClick={handleExportData}>
+              JSONを書き出し
+            </button>
+            <button
+              type="button"
+              className="button button--secondary"
+              onClick={() => importInputRef.current?.click()}
+            >
+              JSONを読み込み
+            </button>
+            <input
+              ref={importInputRef}
+              className="visually-hidden"
+              type="file"
+              accept="application/json,.json"
+              onChange={handleImportData}
+            />
+          </div>
+          {dataFileStatus ? (
+            <p className="form-note data-file-status" aria-live="polite">
+              {dataFileStatus}
+            </p>
+          ) : null}
+        </div>
+
         <details className="settings-section" open>
           <summary>口座 ({accounts.length})</summary>
           <div className="settings-section__body">
@@ -303,6 +447,7 @@ export function SettingsPanel({
                     <th>利用枠</th>
                     <th>締め日</th>
                     <th>引落日</th>
+                    <th>引落タイミング</th>
                     <th>引落口座</th>
                     <th>操作</th>
                   </tr>
@@ -358,6 +503,19 @@ export function SettingsPanel({
                       </td>
                       <td>
                         <select
+                          value={card.withdrawalTiming}
+                          onChange={(event) =>
+                            onUpdateCard(card.id, {
+                              withdrawalTiming: event.target.value as CreditCard["withdrawalTiming"],
+                            })
+                          }
+                        >
+                          <option value="after-closing">締め日後の最初の引落</option>
+                          <option value="next-month">締め月の翌月引落</option>
+                        </select>
+                      </td>
+                      <td>
+                        <select
                           value={card.withdrawalAccountId}
                           onChange={(event) =>
                             onUpdateCard(card.id, {
@@ -387,7 +545,7 @@ export function SettingsPanel({
               </table>
             </div>
             <p className="section-note">
-              次回支払い額と利用可能額、未確定利用額の扱いは上の「日々の更新」で管理します。
+              直近の引落額と利用可能額、数字の時点日、未確定利用額の扱いは上の「日々の更新」で管理します。
             </p>
             <form
               className="inline-form compact-form"
@@ -402,7 +560,9 @@ export function SettingsPanel({
                   limit: cardForm.limit,
                   closingDay: cardForm.closingDay,
                   withdrawalDay: cardForm.withdrawalDay,
+                  withdrawalTiming: cardForm.withdrawalTiming,
                   withdrawalAccountId: cardForm.withdrawalAccountId,
+                  snapshotDate: today,
                   availableAmount: cardForm.limit,
                   nextBillingAmount: 0,
                   unsettledAmountMode: "auto",
@@ -412,6 +572,7 @@ export function SettingsPanel({
                   limit: 300000,
                   closingDay: 20,
                   withdrawalDay: 10,
+                  withdrawalTiming: "next-month",
                   withdrawalAccountId: defaultAccountId,
                 });
               }}
@@ -470,6 +631,21 @@ export function SettingsPanel({
                     }))
                   }
                 />
+              </label>
+              <label className="field">
+                <span>引落タイミング</span>
+                <select
+                  value={cardForm.withdrawalTiming}
+                  onChange={(event) =>
+                    setCardForm((current) => ({
+                      ...current,
+                      withdrawalTiming: event.target.value as CreditCard["withdrawalTiming"],
+                    }))
+                  }
+                >
+                  <option value="next-month">締め月の翌月引落</option>
+                  <option value="after-closing">締め日後の最初の引落</option>
+                </select>
               </label>
               <label className="field">
                 <span>引落口座</span>
@@ -847,6 +1023,234 @@ export function SettingsPanel({
                 収入予定を追加
               </button>
             </form>
+          </div>
+        </details>
+
+        <details className="settings-section">
+          <summary>口座振替 ({accountTransfers.length})</summary>
+          <div className="settings-section__body">
+            <div className="table-scroll">
+              <table className="settings-table">
+                <thead>
+                  <tr>
+                    <th>名称</th>
+                    <th>金額</th>
+                    <th>日付</th>
+                    <th>振替元</th>
+                    <th>振替先</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {accountTransfers.map((transfer) => (
+                    <tr key={transfer.id}>
+                      <td>
+                        <input
+                          type="text"
+                          value={transfer.name}
+                          onChange={(event) =>
+                            onUpdateAccountTransfer(transfer.id, { name: event.target.value })
+                          }
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          step="1"
+                          value={transfer.amount}
+                          onChange={(event) =>
+                            onUpdateAccountTransfer(transfer.id, {
+                              amount: toNumber(event.target.value),
+                            })
+                          }
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="date"
+                          value={transfer.date}
+                          onChange={(event) =>
+                            onUpdateAccountTransfer(transfer.id, { date: event.target.value })
+                          }
+                        />
+                      </td>
+                      <td>
+                        <select
+                          value={transfer.fromAccountId}
+                          onChange={(event) => {
+                            const nextFromAccountId = event.target.value;
+                            const nextToAccountId = accounts
+                              .filter((account) => account.id !== nextFromAccountId)
+                              .some((account) => account.id === transfer.toAccountId)
+                              ? transfer.toAccountId
+                              : getAlternateAccountId(accounts, nextFromAccountId);
+
+                            onUpdateAccountTransfer(transfer.id, {
+                              fromAccountId: nextFromAccountId,
+                              toAccountId: nextToAccountId,
+                            });
+                          }}
+                        >
+                          {accounts.map((account) => (
+                            <option key={account.id} value={account.id}>
+                              {account.name}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td>
+                        <select
+                          value={transfer.toAccountId}
+                          onChange={(event) =>
+                            onUpdateAccountTransfer(transfer.id, { toAccountId: event.target.value })
+                          }
+                        >
+                          {accounts
+                            .filter((account) => account.id !== transfer.fromAccountId)
+                            .map((account) => (
+                              <option key={account.id} value={account.id}>
+                                {account.name}
+                              </option>
+                            ))}
+                        </select>
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="button button--danger"
+                          onClick={() => {
+                            if (confirmDeletion(transfer.name || "口座振替")) {
+                              onDeleteAccountTransfer(transfer.id);
+                            }
+                          }}
+                        >
+                          削除
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {accounts.length < 2 ? (
+              <div className="empty-state">
+                口座振替を使うには、口座を 2 つ以上登録してください。
+              </div>
+            ) : (
+              <form
+                className="inline-form compact-form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (
+                    !transferForm.name.trim() ||
+                    transferForm.amount <= 0 ||
+                    !transferForm.fromAccountId ||
+                    !transferForm.toAccountId ||
+                    transferForm.fromAccountId === transferForm.toAccountId
+                  ) {
+                    return;
+                  }
+
+                  onAddAccountTransfer({
+                    name: transferForm.name.trim(),
+                    amount: transferForm.amount,
+                    date: transferForm.date,
+                    fromAccountId: transferForm.fromAccountId,
+                    toAccountId: transferForm.toAccountId,
+                  });
+                  setTransferForm({
+                    name: "",
+                    amount: 0,
+                    date: today,
+                    fromAccountId: defaultAccountId,
+                    toAccountId: getAlternateAccountId(accounts, defaultAccountId),
+                  });
+                }}
+              >
+                <label className="field">
+                  <span>名称</span>
+                  <input
+                    type="text"
+                    value={transferForm.name}
+                    onChange={(event) =>
+                      setTransferForm((current) => ({ ...current, name: event.target.value }))
+                    }
+                  />
+                </label>
+                <label className="field">
+                  <span>金額</span>
+                  <input
+                    type="number"
+                    step="1"
+                    value={transferForm.amount}
+                    onChange={(event) =>
+                      setTransferForm((current) => ({
+                        ...current,
+                        amount: toNumber(event.target.value),
+                      }))
+                    }
+                  />
+                </label>
+                <label className="field">
+                  <span>日付</span>
+                  <input
+                    type="date"
+                    value={transferForm.date}
+                    onChange={(event) =>
+                      setTransferForm((current) => ({ ...current, date: event.target.value }))
+                    }
+                  />
+                </label>
+                <label className="field">
+                  <span>振替元口座</span>
+                  <select
+                    value={transferForm.fromAccountId}
+                    onChange={(event) =>
+                      setTransferForm((current) => {
+                        const nextFromAccountId = event.target.value;
+                        const nextToAccountId = accounts
+                          .filter((account) => account.id !== nextFromAccountId)
+                          .some((account) => account.id === current.toAccountId)
+                          ? current.toAccountId
+                          : getAlternateAccountId(accounts, nextFromAccountId);
+
+                        return {
+                          ...current,
+                          fromAccountId: nextFromAccountId,
+                          toAccountId: nextToAccountId,
+                        };
+                      })
+                    }
+                  >
+                    {accounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  <span>振替先口座</span>
+                  <select
+                    value={transferForm.toAccountId}
+                    onChange={(event) =>
+                      setTransferForm((current) => ({ ...current, toAccountId: event.target.value }))
+                    }
+                  >
+                    {accounts
+                      .filter((account) => account.id !== transferForm.fromAccountId)
+                      .map((account) => (
+                        <option key={account.id} value={account.id}>
+                          {account.name}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <button type="submit" className="button button--secondary">
+                  口座振替を追加
+                </button>
+              </form>
+            )}
           </div>
         </details>
 

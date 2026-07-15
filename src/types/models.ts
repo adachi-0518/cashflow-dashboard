@@ -1,5 +1,6 @@
 export type IsoDateString = string;
 export type CardUnsettledAmountMode = "auto" | "manual";
+export type CardWithdrawalTiming = "after-closing" | "next-month";
 
 export interface Account {
   id: string;
@@ -14,7 +15,9 @@ export interface CreditCard {
   limit: number;
   closingDay: number;
   withdrawalDay: number;
+  withdrawalTiming: CardWithdrawalTiming;
   withdrawalAccountId: string;
+  snapshotDate: IsoDateString;
   availableAmount: number;
   nextBillingAmount: number;
   unsettledAmountMode: CardUnsettledAmountMode;
@@ -41,6 +44,16 @@ export interface IncomePlan {
   enabled?: boolean;
 }
 
+export interface AccountTransfer {
+  id: string;
+  name: string;
+  amount: number;
+  date: IsoDateString;
+  fromAccountId: string;
+  toAccountId: string;
+  enabled?: boolean;
+}
+
 export interface OneTimeExpense {
   id: string;
   name: string;
@@ -57,5 +70,6 @@ export interface AppData {
   cards: CreditCard[];
   subscriptions: Subscription[];
   incomePlans: IncomePlan[];
+  accountTransfers: AccountTransfer[];
   oneTimeExpenses: OneTimeExpense[];
 }

@@ -38,5 +38,13 @@ export function resolveCardWithdrawalDate(
 ): IsoDateString {
   const closingDate = resolveCardClosingDate(card, chargeDate);
 
+  if (card.withdrawalTiming === "next-month") {
+    const closing = parseDateString(closingDate);
+    const next = shiftYearMonth(closing.getFullYear(), closing.getMonth(), 1);
+    const withdrawalDay = clampDayToMonth(next.year, next.monthIndex, card.withdrawalDay);
+
+    return buildDateString(next.year, next.monthIndex, withdrawalDay);
+  }
+
   return getNextOccurrenceAfter(closingDate, card.withdrawalDay);
 }

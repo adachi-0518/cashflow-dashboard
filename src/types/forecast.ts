@@ -3,6 +3,7 @@ import type { IsoDateString } from "./models";
 export type ForecastEventKind =
   | "income"
   | "account-expense"
+  | "account-transfer"
   | "card-charge"
   | "card-withdrawal";
 
@@ -20,16 +21,21 @@ export interface ForecastEvent {
   kind: ForecastEventKind;
   title: string;
   amount: number;
-  direction: "in" | "out";
+  direction: "in" | "out" | "neutral";
   targetType: "account" | "card";
   targetId: string;
   targetName: string;
   linkedCardId?: string;
+  counterpartyTargetId?: string;
+  counterpartyTargetName?: string;
+  counterpartyCashImpact?: number;
   affectsCash: boolean;
   cashImpact: number;
   totalCashAfter: number;
   accountBalanceAfter?: number;
   cardOutstandingAfter?: number;
+  counterpartyAccountBalanceAfter?: number;
+  minimumAccountBalanceAfter: number;
   shortageAccountsAfter: string[];
   reasonItems: ForecastReasonItem[];
   note?: string;

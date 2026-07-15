@@ -31,10 +31,21 @@ export function ForecastTable({ events }: ForecastTableProps) {
         </thead>
         <tbody>
           {events.map((event) => {
-            const amountSign = event.direction === "in" ? "+" : "-";
+            const amountSign =
+              event.direction === "in" ? "+" : event.direction === "out" ? "-" : "";
+            const amountClass =
+              event.direction === "in"
+                ? "amount-positive"
+                : event.direction === "out"
+                  ? "amount-negative"
+                  : "amount-neutral";
             const balanceLabel = event.targetType === "account" ? "口座" : "カード債務";
             const reflectedBalance =
               event.targetType === "account" ? event.accountBalanceAfter : event.cardOutstandingAfter;
+            const targetLabel =
+              event.kind === "account-transfer" && event.counterpartyTargetName
+                ? `${event.targetName} → ${event.counterpartyTargetName}`
+                : event.targetName;
 
             return (
               <tr key={event.id}>
@@ -53,13 +64,23 @@ export function ForecastTable({ events }: ForecastTableProps) {
                     ) : null}
                   </div>
                 </td>
-                <td className={event.direction === "in" ? "amount-positive" : "amount-negative"}>
+                <td className={amountClass}>
                   {amountSign}
                   {formatCurrency(event.amount)}
                 </td>
-                <td>{event.targetName}</td>
+                <td>{targetLabel}</td>
                 <td>
-                  {typeof reflectedBalance === "number" ? (
+                  {event.kind === "account-transfer" &&
+                  typeof reflectedBalance === "number" &&
+                  event.counterpartyTargetName &&
+                  typeof event.counterpartyAccountBalanceAfter === "number" ? (
+                    <div className="balance-cell">
+                      <span>{event.targetName}</span>
+                      <strong>{formatCurrency(reflectedBalance)}</strong>
+                      <span>{event.counterpartyTargetName}</span>
+                      <strong>{formatCurrency(event.counterpartyAccountBalanceAfter)}</strong>
+                    </div>
+                  ) : typeof reflectedBalance === "number" ? (
                     <div className="balance-cell">
                       <span>{balanceLabel}</span>
                       <strong>{formatCurrency(reflectedBalance)}</strong>
